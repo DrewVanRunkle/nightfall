@@ -143,3 +143,50 @@ needs to actually validate Phase 1.
 
 **Scope**: Cross-platform (applies equally to verifying the existing Quest build and any future
 Android XR build).
+
+---
+
+## 2026-08-16 — Target GodotOpenXRVendors plugin v5.1+, Godot 4.6.2+, Min/Target SDK 34, NDK 28.x for the Android XR preset
+
+**Decision**: Adopt the following as the confirmed, sourced targets for the future
+`NightfallAndroidXR` export preset (not yet created): GodotOpenXRVendors plugin **v5.1 or
+higher**, Godot **4.6.2 or higher** (the project's current 4.7 satisfies this), Android **Min SDK
+34 / Target SDK 34**, Android SDK Build-Tools **34.0.0+**, and a separate **NDK 28.x** toolchain.
+Do not change the existing Quest presets' `min_sdk=29`/`target_sdk=32`/NDK 27.0.12077973 values —
+those stay as-is.
+
+**Reason**: The Phase 0 audit (`ANDROID_XR_PORT.md` §7, original items 1–3) flagged the
+installed-GodotOpenXRVendors-plugin version, the passthrough extension-enablement mechanism, and
+the min/target SDK sufficiency as unconfirmed. These are answerable by research rather than a
+local build, so they were researched via `WebSearch`/`WebFetch` against official sources before
+proceeding further: `developer.android.com/develop/xr/godot`,
+`developer.android.com/develop/xr/godot/setup`, and
+`developer.android.com/develop/xr/openxr/extensions` (the `vr.org`, `godotengine.org`, and
+`godotvr.github.io` community-coverage URLs surfaced by search were blocked by this session's
+network egress proxy and could not be directly fetched; findings rely on the Google-hosted
+official docs plus WebSearch's own result summaries of those blocked pages, which independently
+corroborated the same version numbers). Confirmed: Google, the Godot Foundation, and W4 Games
+officially brought Android XR support to Godot 4.6.2+ via GodotOpenXRVendors plugin v5.1
+(released May 2026); the official Godot-for-Android-XR setup guide states Min/Target SDK 34,
+Build-Tools 34.0.0+, and NDK "any 28.x version" as requirements. This directly resolves whether
+`enable_androidxr_plugin=false`+`android_xr_features/*` in `export_presets.cfg` reflects a real,
+supported toolchain path (it does) and reveals a previously-undiscovered NDK-version split
+between the Quest and Android XR build targets that a build-only Phase 1 attempt would not have
+surfaced any faster than this research did.
+
+**Alternatives considered**:
+- Defer this research until a dev machine with the Godot editor is available and read the
+  installed plugin's `plugin.cfg` directly. Not mutually exclusive — that verification step is
+  still required (the locally-installed plugin copy is gitignored and unconfirmed) and is tracked
+  as a next step, but the version *target* to install can be pinned now from official docs without
+  waiting.
+- Guess at reasonable SDK levels (e.g., assume Target SDK 34 from general 2026 Play Store policy
+  trends without confirming Android-XR-specific requirements). Rejected: working rule 10 requires
+  using current Android XR APIs/requirements rather than assumptions, and the actual Android XR
+  guide's NDK 28.x requirement would have been missed by a generic Play-Store-policy guess.
+
+**Files/components affected**: `ANDROID_XR_PORT.md` (§4 items 19-20, §5, §7, §9, §12 updated with
+these figures); no source/config files changed yet — `export_presets.cfg` and `BUILD.md` will be
+updated when Phase 3 implementation begins.
+
+**Scope**: Android XR-specific.

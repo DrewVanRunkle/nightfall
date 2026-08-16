@@ -1,6 +1,8 @@
 # Nightfall — Android XR Port: Living Status Document
 
-**Status as of 2026-08-16: Phase 0 (repository audit) complete. No code changes made yet.**
+**Status as of 2026-08-16: Phase 0 (repository audit) complete, including research follow-up
+that resolved the plugin-version/SDK-level/passthrough-extension unknowns from §7 items 1–3
+against official Google/Godot sources. No code changes made yet.**
 
 This document is maintained continuously during the Android XR port. It reflects the current
 state of understanding and implementation — update it whenever a decision, blocker, or milestone
@@ -123,8 +125,8 @@ prevent build/launch/runtime on Android XR until changed).
 | 16 | Meta Quest Touch Plus controller models | `main.gd:1330-1354`, `models/controllers/MetaQuestTouchPlus_*.fbx` | **Quest-specific** | Hardcoded asset paths; loads silently return null off-Quest (`load()` returns null → no crash) but no Android XR controller model exists yet. Cosmetic only — not an MVP blocker. |
 | 17 | `enable_meta_plugin=true` + `meta_xr_features/*` in both Android export presets | `export_presets.cfg:238-253,499-514` | **Quest-specific** | Actively drives today's manifest/AAR selection. Needs a parallel Android XR preset, not a modification of these. |
 | 18 | `godotopenxr-meta-{debug,release}.aar` staging | `build.sh:184,187` | **Quest-specific / blocker for AXR build** | Hardcoded filenames; an Android XR export needs the equivalent Android XR vendor AAR staged instead (or in addition). |
-| 19 | `addons/godotopenxrvendors/` plugin itself | not in repo (gitignored) | **Unknown — must verify** | `export_presets.cfg`'s pre-existing `android_xr_features/*`/`enable_androidxr_plugin` keys strongly imply the installed plugin version already supports Android XR as a vendor, but the actual installed plugin (and whether its `.bin/android/` contains an Android XR AAR) cannot be confirmed from this repo checkout. **Must be verified on the original dev machine or by a fresh AssetLib install.** |
-| 20 | `min_sdk="29"` / `target_sdk="32"` | `export_presets.cfg:34-35,292-293` | **Possible blocker — must verify** | SDK 32 (Android 12L) predates the Android XR public SDK generation. Needs verification against current Android XR `compileSdk`/`targetSdk` requirements (this audit's knowledge of exact current AXR SDK levels may be stale) and likely a bump, alongside Godot's generated `config.gradle` (`compileSdkVersion`), which is template-generated, not checked into this repo. |
+| 19 | `addons/godotopenxrvendors/` plugin itself | not in repo (gitignored) | **Confirmed available upstream — must verify local install** | Official Google/Godot Foundation/W4 Games partnership shipped Android XR support in **GodotOpenXRVendors plugin v5.1** (May 2026, requires Godot 4.6.2+). The locally-installed copy in this repo's environment must be updated to v5.1+ via the Godot AssetLib and its `.bin/android/` inspected for the exact Android XR AAR filename before `build.sh` can stage it. See `ANDROID_XR_PORT.md` §7 item 1. |
+| 20 | `min_sdk="29"` / `target_sdk="32"` | `export_presets.cfg:34-35,292-293` | **Confirmed blocker for a new Android XR preset (Quest presets are fine as-is)** | Official requirement (developer.android.com/develop/xr/godot/setup): **Min SDK 34, Target SDK 34**, Build-Tools 34.0.0+, **NDK 28.x** (Quest build currently pins NDK 27.0.12077973 — a separate toolchain, not just an SDK bump). The new `NightfallAndroidXR` preset must set these explicitly; do not change the existing Quest presets. See §7 item 3. |
 | 21 | No checked-in `AndroidManifest.xml` | n/a | **Neutral** | Godot generates/merges the manifest at export time from the export template + `export_presets.cfg` options + whichever vendor plugin(s) are enabled. All XR-permission wiring flows through the preset config and the vendor plugin, not a static file to migrate. |
 | 22 | `AI 3D mode` reachability | `main.gd:713`, `settings_controller.gd` (per `performance-hypotheses-2026-07-08-fable.md:261`) | **Pre-existing bug, not Android-XR-related** | `ai_3d_mode` is clamped to `[0,1]` but `apply_stereo()` reportedly only activates the depth estimator at mode ≥ 3 — appears to be currently-unreachable code on Quest too. Flagged here for awareness; **not in scope for the Android XR port**, do not fix opportunistically (working rule 1). Needs independent confirmation before treating as fact. |
 
@@ -141,9 +143,9 @@ model assets. None of the streaming/decode/GameStream core needs to change.
 |---|---|---|
 | `xr_features/enable_meta_plugin=true` + `meta_xr_features/*` | `export_presets.cfg` presets 0 & 1 | New `[preset.3] NightfallAndroidXR` with `xr_features/enable_androidxr_plugin=true` and the existing (currently inert) `android_xr_features/*` block populated appropriately. Leave presets 0/1 untouched. |
 | `godotopenxr-meta-{debug,release}.aar` | `build.sh:184,187` | Extend `build.sh` to stage the Android-XR-vendor AAR from `addons/godotopenxrvendors/.bin/android/` when building the new preset (exact AAR name TBD — must be confirmed once the plugin is installed locally; likely `godotopenxr-androidxr-{debug,release}.aar` or similar, following the existing per-vendor naming convention). |
-| `openxr/extensions/meta/passthrough=true` | `project.godot:48` | Research whether Android XR needs an equivalent `openxr/extensions/androidxr/...` project setting (added by the vendor plugin's `project.godot` schema when Android XR support is enabled) to advertise `XR_ENV_BLEND_MODE_ALPHA_BLEND`, or whether Android XR runtimes advertise it natively without a vendor flag. **Unconfirmed — needs on-device or plugin-source verification (§7).** |
+| `openxr/extensions/meta/passthrough=true` | `project.godot:48` | Nightfall's passthrough code only needs core `XR_ENV_BLEND_MODE_ALPHA_BLEND` (§7 item 2) — likely needs **no** Android XR-specific project-setting flag at all, since that's core OpenXR 1.0, not a vendor extension. **Confirm on-device**; do not add speculative extension flags before testing. |
 | `MetaQuestTouchPlus_{Left,Right}.fbx` controller models | `main.gd:1330-1354`, `models/controllers/` | Not MVP-critical. Long-term: gate model loading on a detected platform/vendor (e.g. `OS.get_name()`/interaction-profile check) and either supply an Android XR controller model or fall back to the existing generic laser/hand visualization already in `main.gd` (`_create_hand_visualizer`), which requires no controller mesh at all. |
-| `min_sdk=29` / `target_sdk=32` | `export_presets.cfg` | Bump for the new Android XR preset only (again, do not touch the Quest presets) once current Android XR SDK-level requirements are confirmed. |
+| `min_sdk=29` / `target_sdk=32`, NDK 27.0.12077973 | `export_presets.cfg`, `BUILD.md` | New `NightfallAndroidXR` preset only (do not touch the Quest presets): `min_sdk="34"`, `target_sdk="34"`, Android SDK Build-Tools 34.0.0+, and a separate **NDK 28.x** toolchain (confirmed requirement, source: developer.android.com/develop/xr/godot/setup — see §7 item 3). |
 | Two Meta-only permissions implicitly injected by the vendor plugin at export time (not visible in `export_presets.cfg`'s generic `permissions/*` block) | vendor plugin manifest fragment | N/A for Android XR preset — simply don't enable the Meta plugin there; whatever manifest fragment the Android XR vendor plugin injects instead is out of this repo's control and should be captured by inspecting the generated manifest after a real export. |
 
 Nothing above requires touching `addons/nightfall-stream/` (the GDExtension/video pipeline) or
@@ -221,28 +223,66 @@ import path fails to initialize on Android XR hardware, the correct response is 
 
 ---
 
-## 7. Known problems / open questions requiring on-device or upstream verification
+## 7. Known problems / open questions
 
-These cannot be resolved by static code review and must be tracked until closed:
+Items 1–3 below were static-review unknowns at the Phase 0 audit and have since been **resolved
+by research** (web search against Google's official Android XR developer docs and the Godot/AXR
+ecosystem, 2026-08-16 — see `decisions.md` for the dated entry and sources). Items 4–7 remain
+genuinely unresolvable without a device/build and are tracked as before.
 
-1. **Is the installed GodotOpenXRVendors plugin version's Android XR support real and AAR-complete?**
-   `addons/godotopenxrvendors/` is gitignored and not present in this checkout. The presence of
-   `android_xr_features/*` keys in `export_presets.cfg` implies a plugin version that models
-   Android XR as a vendor, but nobody has confirmed the plugin actually ships an Android XR AAR
-   in `.bin/android/`. **Action**: install/update the plugin via the Godot AssetLib on a dev
-   machine with the editor, inspect `addons/godotopenxrvendors/plugin.cfg` for its version and
-   `.bin/android/` for AAR filenames, and record findings here.
-2. **Does Android XR need a passthrough extension enablement flag equivalent to
-   `openxr/extensions/meta/passthrough=true`?** Unknown without either plugin source inspection
-   or on-device testing of `get_supported_environment_blend_modes()`.
-3. **Is `min_sdk=29`/`target_sdk=32` sufficient for Android XR?** Needs verification against
-   current (2026) Android XR platform requirements — flagged as likely too low but not confirmed.
+1. **RESOLVED — GodotOpenXRVendors plugin Android XR support is real and official.** Google, the
+   Godot Foundation, and W4 Games announced official Godot support for Android XR (Godot 4.6.2+)
+   in partnership, and **GodotOpenXRVendors plugin v5.1** (released May 2026) is the version that
+   ships Android XR vendor support — trackables/spatial entities, depth texture extensions,
+   device anchor persistence, raycasting, and mouse interaction, alongside the existing Meta
+   loader. Source: developer.android.com/develop/xr/godot, developer.android.com/develop/xr/godot/setup.
+   **Action still required**: confirm the *locally installed* copy of the plugin
+   (`addons/godotopenxrvendors/`, gitignored, not in this repo) is actually v5.1+ — install/update
+   via the Godot AssetLib on a dev machine and check `plugin.cfg`. The exact Android XR AAR
+   filename in `.bin/android/` still needs to be read off that installed copy (by analogy with
+   the existing `godotopenxr-meta-{debug,release}.aar` naming, it is very likely
+   `godotopenxr-androidxr-{debug,release}.aar` or similar, but this must be confirmed, not
+   assumed, before wiring it into `build.sh`).
+2. **RESOLVED (with nuance) — passthrough enablement.** Android XR's official OpenXR extension
+   docs (developer.android.com/develop/xr/openxr/extensions) model passthrough differently from
+   Meta's single `XR_FB_passthrough` flag: `XR_ANDROID_composition_layer_passthrough_mesh` (needs
+   the `SCENE_UNDERSTANDING_COARSE` runtime permission) is for compositing passthrough onto
+   arbitrary geometry, and `XR_ANDROID_depth_texture`/`light_estimation` (need
+   `SCENE_UNDERSTANDING_FINE`) are for advanced mixed-reality features — none of which Nightfall
+   currently uses. Nightfall's actual passthrough implementation (`main.gd:820-841`,
+   `settings_controller.gd:76-91`) only queries `get_supported_environment_blend_modes()` and
+   sets `XR_ENV_BLEND_MODE_ALPHA_BLEND`, which is **core OpenXR 1.0**, not a vendor extension — so
+   it may work with **zero** Android XR-specific extension enablement or manifest permission,
+   unlike on Quest where the Meta runtime only advertises alpha-blend when `XR_FB_passthrough` is
+   requested via the `openxr/extensions/meta/passthrough=true` project setting. **Still an
+   assumption needing on-device confirmation**: whether Android XR's runtime advertises
+   `ALPHA_BLEND` with no extension request at all, or requires some minimal Android XR extension
+   to be requested even for basic blend-mode passthrough, isn't stated in the docs reviewed and
+   must be logged/tested in Phase 3 (see §10 debug logging plan).
+3. **RESOLVED — min/target SDK, and a new NDK finding.** Official Android XR requirements
+   (confirmed on developer.android.com/develop/xr/godot/setup): **Min SDK 34, Target SDK 34**,
+   Android SDK Build-Tools 34.0.0+, and — a new finding not in the original audit — **NDK: any
+   28.x version** (Nightfall's `BUILD.md` currently pins **NDK 27.0.12077973** for the Quest
+   build; the new Android XR preset needs a separate/updated NDK — a genuine build-tooling
+   difference between the two targets, not just an SDK-level bump). This confirms
+   `export_presets.cfg`'s current `min_sdk="29"`/`target_sdk="32"` (both presets) are far below
+   what an Android XR preset needs; the new `NightfallAndroidXR` preset must set `min_sdk="34"`,
+   `target_sdk="34"` explicitly and **not** touch the existing Quest presets' values (Quest still
+   works fine at 29/32). Also newly confirmed: the official Godot Android XR setup guide
+   recommends the **Mobile** renderer and `MSAA 3D: 4x`; Nightfall currently ships with
+   `config/features=PackedStringArray("4.7", "Forward Plus")` (`project.godot:20`) and explicitly
+   disables MSAA on Android (`main.gd:846`, for the 4K-performance reasons documented in
+   `doc/4k-performance-optimization.md`). Since Nightfall already runs Forward+ successfully on
+   Quest's mobile Adreno GPU, this is flagged as a **compatibility risk to test**, not a confirmed
+   blocker — do not switch renderers preemptively (working rule 1); only revisit if Forward+
+   demonstrably fails or underperforms on Android XR hardware.
 4. **Does the target Vulkan ICD (XREAL Aura / Android XR reference driver) implement
    `VK_ANDROID_external_memory_android_hardware_buffer`?** Assumed yes (near-universal on modern
-   Android GPUs) but must be confirmed via device logs, not assumed.
+   Android GPUs) but must be confirmed via device logs, not assumed. Unresolved — requires device.
 5. **Do `OpenXRCompositionLayerCylinder`/`Quad` behave correctly on the Android XR OpenXR
    runtime?** Code has a safe mesh-rendering fallback if `is_natively_supported()` returns false,
-   but actual visual/latency behavior needs on-device validation either way.
+   but actual visual/latency behavior needs on-device validation either way. Unresolved — requires
+   device.
 6. **AI 3D mode reachability** (`ai_3d_mode` clamped to `[0,1]` vs. `apply_stereo()` gating at
    `>= 3`, per `performance-hypotheses-2026-07-08-fable.md:261`) — appears to be a pre-existing
    issue unrelated to this port; confirm independently before acting, and if real, it's out of
@@ -250,7 +290,9 @@ These cannot be resolved by static code review and must be tracked until closed:
 7. **Does Godot 4.7's patched-engine requirement (custom AHB template) also need building for
    whatever Android XR uses as its runtime/loader?** The patch itself is generic Android/Vulkan
    (§6), so the same custom-patched `libgodot_android.so` templates built for Quest should work
-   for Android XR — but this has not been confirmed by an actual Android XR build/run.
+   for Android XR — but building it will require the newer NDK 28.x + API 34 toolchain per item 3
+   above, not the NDK 27/API-29 toolchain the Quest templates were built with, and this has not
+   been confirmed by an actual Android XR build/run.
 
 ---
 
@@ -320,11 +362,22 @@ in this section before Phase 1 can be marked complete.
 
 ### Planned Android XR build path (Phase 3, not yet implemented)
 
-Once a `NightfallAndroidXR` export preset exists (§5, §8):
+**Confirmed prerequisites** (source: developer.android.com/develop/xr/godot/setup, 2026-08-16 —
+see `decisions.md`), in addition to everything `BUILD.md` already lists:
+
+- Godot Engine 4.6.2+ (project is on 4.7, which satisfies this)
+- **GodotOpenXRVendors plugin v5.1 or higher** (must be confirmed/updated locally — see §7 item 1)
+- Android SDK Platform 34 ("UpsideDownCake"), Build-Tools 34.0.0+
+- **NDK: any 28.x version** — separate from the NDK 27.0.12077973 pinned for the Quest build
+- CMake 3.10.2+ (already satisfied — this environment has 3.28)
+- Export preset: Min SDK 34, Target SDK 34, XR Mode = OpenXR
 
 ```bash
-# Same GDExtension build as above — no changes needed, it's platform-generic within Android.
+# GDExtension build — same command, but must be built with the NDK 28.x toolchain above,
+# not the NDK 27 toolchain used for the Quest .so (the CMake/ninja invocation is otherwise
+# platform-generic within Android; only the NDK path changes).
 cd addons/nightfall-stream
+export ANDROID_NDK_HOME=/path/to/ndk/28.x.x
 cmake --preset android && ninja -C build/android
 
 # Export using the new preset (exact build.sh flag TBD — will likely be `--androidxr`
@@ -391,21 +444,26 @@ document created.
 
 ## 12. Next steps
 
-1. **Close the Phase 0 unknowns in §7** — especially confirming the installed GodotOpenXRVendors
-   plugin version and its Android XR AAR, on a machine with the Godot editor installed.
-2. **Phase 1** — run the documented `BUILD.md` process end-to-end on real tooling (Godot 4.7 Beta
-   2, NDK 27.0.12077973, vcpkg, patched engine templates) to establish that the *existing* Quest
+1. ~~Close the Phase 0 unknowns in §7~~ — items 1–3 (plugin version, passthrough extension
+   requirements, SDK/NDK levels) resolved by research on 2026-08-16; remaining items 4–7 need a
+   real device/build and stay open.
+2. On a machine with the Godot editor installed: install/update GodotOpenXRVendors to **v5.1+**
+   via the AssetLib and record its exact version and Android XR AAR filename(s) here.
+3. **Phase 1** — run the documented `BUILD.md` process end-to-end on real tooling (Godot 4.7,
+   NDK 27.0.12077973, vcpkg, patched engine templates) to establish that the *existing* Quest
    build is healthy before touching anything. Record exact commands/output here.
-3. **Phase 3 minimum target** — once Phase 1's baseline is confirmed:
+4. **Phase 3 minimum target** — once Phase 1's baseline is confirmed:
    - Add `[preset.3] NightfallAndroidXR` to `export_presets.cfg` (own package name, mirrors
      existing preset pattern) with `enable_androidxr_plugin=true`, `enable_meta_plugin=false`,
-     and appropriate `android_xr_features/*`/SDK level values.
-   - Extend `build.sh` to stage the Android XR vendor AAR for that preset.
+     `min_sdk="34"`, `target_sdk="34"`, and appropriate `android_xr_features/*` values.
+   - Build the GDExtension a second time with an **NDK 28.x** toolchain (separate from the NDK 27
+     toolchain used for Quest) and extend `build.sh` to stage the confirmed Android XR vendor AAR.
    - Build, install to XREAL Aura, and work through the testing checklist in §10 in order,
      starting with "application installs" / "launches into immersive XR" / "OpenXR initializes."
+     Log whether alpha-blend passthrough works with no extra extension request (§7 item 2).
    - Only after basic streaming + gamepad + audio work (the MVP list in the task brief) should
      hand tracking, advanced passthrough, or any other stretch feature be attempted.
-4. Keep this document and `decisions.md` updated at each step — do not let them go stale.
+5. Keep this document and `decisions.md` updated at each step — do not let them go stale.
 
 ## 13. Future work (explicitly out of scope for the initial port)
 
