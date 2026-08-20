@@ -200,6 +200,19 @@ try {
     Write-Host "Extracting Android template..."
     Expand-Archive -Path $Templates -DestinationPath $buildDir -Force
 
+    # Extracting android_source.zip ourselves is what "Project > Install Android
+    # Build Template" does, but Godot also validates res://android/.build_version
+    # against the running editor and refuses the Gradle build on a mismatch
+    # ("Android build template not installed"). The stamp must be the template's
+    # own version, which is the export_templates folder name (e.g. 4.7.1.stable).
+    $buildVersion = Split-Path (Split-Path $Templates -Parent) -Leaf
+    $versionStamp = Join-Path $ScriptDir 'android\.build_version'
+    $existing = if (Test-Path $versionStamp) { (Get-Content $versionStamp -Raw).Trim() } else { '' }
+    if ($existing -ne $buildVersion) {
+        Set-Content -Path $versionStamp -Value $buildVersion -NoNewline
+        Write-Host "Stamped android/.build_version = $buildVersion (was '$existing')"
+    }
+
     # Patched Godot engine .so (AHB Vulkan patch). Optional: without it the app
     # still builds and launches, but every decoded video frame is dropped at
     # stream_connection.cpp:1195 and the screen stays black.
