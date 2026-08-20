@@ -406,18 +406,49 @@ work modifies `build.sh`.
 
 ## 10. Installation & testing procedure (Android XR, once a build exists)
 
+> ### ⚠️ Log handling — read before pasting any device output
+>
+> Per the 2026-08-20 decision in `decisions.md`, the target device is not named in this
+> repository. **Raw `adb` output identifies the device far more thoroughly than a product name
+> does**, and the commands in this section produce exactly that kind of output:
+>
+> - `adb logcat` banners and `adb shell getprop` expose `ro.product.model`,
+>   `ro.product.manufacturer`, `ro.build.fingerprint`, SoC and GPU driver versions
+> - OpenXR initialization logs the runtime name and version
+> - `adb devices` prints the hardware serial number
+>
+> **Rules for this repository:**
+>
+> 1. Never paste raw `logcat`, `getprop`, `dumpsys`, or `adb devices` output into a committed
+>    file — including this document, debug notes, commit messages, issues, and PR descriptions.
+> 2. When a log line needs to be recorded, record the **property, not the value**. Write
+>    "the runtime advertises `XR_ENV_BLEND_MODE_ALPHA_BLEND`" or "`AHardwareBuffer` import
+>    succeeded on first frame", not the version banner or fingerprint that carried that fact.
+> 3. Redact before sharing outside the project — including with AI assistants operating on a
+>    public repository, and in any bug report filed upstream (Godot, GodotOpenXRVendors,
+>    moonlight-common-c), where the report itself is public.
+> 4. If device-identifying output does get committed, treat it as disclosed: scrubbing the
+>    working tree does not unpublish history that has already been served. Prefer prevention.
+>
+> This is a publication constraint only. It does not restrict what you may run locally, or what
+> you may paste into a private chat while debugging — only what gets written down here.
+
 ```bash
-adb devices                                   # confirm device visible
-adb install -r Nightfall-AndroidXR-debug.apk  # exact filename TBD once export preset exists
-adb shell am start -n app.nightfall.androidxr/com.godot.game.GodotApp   # package name TBD
-adb logcat -s NightfallXR:* GodotApp:* AndroidMediaCodec:*
+adb devices                                   # confirm device visible (serial - do not record)
+adb install -r Nightfall-AndroidXR-arm64-v8a-debug.apk
+adb shell am start -n app.nightfall.androidxr/com.godot.game.GodotApp
+adb logcat -s NightfallXR:* GodotApp:* AndroidMediaCodec:* VCONN:*
 ```
+
+On Windows the same commands run from PowerShell; `.\build.ps1 -Target androidxr -Install`
+performs the install step for you.
 
 Testing procedure (MVP checklist from the task brief — mark off as verified on real hardware):
 
 - [ ] Application installs
 - [ ] Application launches into immersive XR
-- [ ] OpenXR initializes successfully (check logcat for runtime name, enabled extensions)
+- [ ] OpenXR initializes successfully (check logcat for the runtime name and enabled extensions —
+      verify them, but record only *that* initialization succeeded, per the log-handling rules above)
 - [ ] Head tracking works
 - [ ] Nightfall UI is visible
 - [ ] Host discovery / manual IP connect works
