@@ -236,13 +236,26 @@ genuinely unresolvable without a device/build and are tracked as before.
    ships Android XR vendor support — trackables/spatial entities, depth texture extensions,
    device anchor persistence, raycasting, and mouse interaction, alongside the existing Meta
    loader. Source: developer.android.com/develop/xr/godot, developer.android.com/develop/xr/godot/setup.
-   **Action still required**: confirm the *locally installed* copy of the plugin
-   (`addons/godotopenxrvendors/`, gitignored, not in this repo) is actually v5.1+ — install/update
-   via the Godot AssetLib on a dev machine and check `plugin.cfg`. The exact Android XR AAR
-   filename in `.bin/android/` still needs to be read off that installed copy (by analogy with
-   the existing `godotopenxr-meta-{debug,release}.aar` naming, it is very likely
-   `godotopenxr-androidxr-{debug,release}.aar` or similar, but this must be confirmed, not
-   assumed, before wiring it into `build.sh`).
+   **Verified on a dev machine 2026-08-20** (Windows 11, Godot 4.7.1, plugin installed via
+   in-editor AssetLib):
+   - The **Android XR vendor toggle exists and works** — setting it in the export dialog writes
+     `xr_features/enable_androidxr_plugin=true`.
+   - The Android XR AAR filenames are confirmed as **`godotopenxr-androidxr-debug.aar`** and
+     **`godotopenxr-androidxr-release.aar`**, in
+     `addons/godotopenxrvendors/.bin/android/{debug,release}/` — matching the existing
+     `godotopenxr-meta-*` convention. The plugin ships loaders for androidxr, khronos, lynx,
+     magicleap, meta, and pico, plus `openxr-validation-layers-*.aar`.
+   - The `android_xr_features/*` option set the plugin exposes is **identical** to the five keys
+     already present in this repo (`eye_tracking`, `hand_tracking`, `tracked_controllers`,
+     `recommended_boundary_type`, `use_experimental_features`) — no new export options, so
+     hand-editing `export_presets.cfg` is safe.
+   - The plugin is a **GDExtension** (`plugin.gdextension` + per-platform binaries), not a
+     script-based `EditorPlugin`, so it does *not* appear under Project Settings → Plugins and
+     needs an editor restart after install to register.
+
+   **Still open**: the precise installed plugin *version number* has not been read off disk. The
+   identical option set is consistent with either v5.1 or an older release, so this should be
+   confirmed before trusting Android XR runtime behavior.
 2. **RESOLVED (with nuance) — passthrough enablement.** Android XR's official OpenXR extension
    docs (developer.android.com/develop/xr/openxr/extensions) model passthrough differently from
    Meta's single `XR_FB_passthrough` flag: `XR_ANDROID_composition_layer_passthrough_mesh` (needs

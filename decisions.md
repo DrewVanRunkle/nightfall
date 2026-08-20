@@ -190,3 +190,84 @@ these figures); no source/config files changed yet — `export_presets.cfg` and 
 updated when Phase 3 implementation begins.
 
 **Scope**: Android XR-specific.
+
+---
+
+## 2026-08-20 — Add `build.ps1` for native-Windows builds instead of requiring WSL2
+
+**Decision**: Support building on Windows natively by adding a PowerShell script (`build.ps1`)
+that mirrors `build.sh`'s Android export path, rather than requiring developers to work inside
+WSL2. `build.sh` is left untouched and remains the reference implementation for Linux.
+
+**Reason**: The primary developer on this fork works on Windows 11 and chose a native-Windows
+toolchain over WSL2. `build.sh` cannot run natively on Windows: it is bash, it hardcodes Linux
+filesystem paths (`build.sh:30-34`), and `build.sh:168` invokes `unzip`, which Git Bash does not
+ship. Rather than fork or rewrite `build.sh` (which would break Linux contributors and diverge
+from upstream), a parallel Windows entry point keeps both platforms working from the same
+project layout and the same export presets.
+
+`build.ps1` intentionally covers only the Android export path — the Linux binary/AppImage paths
+in `build.sh` (`build.sh:39-136`, which shell out to Docker) are not reproduced, since they have
+no meaning on a Windows host.
+
+Per the task brief's "do not hardcode developer-specific filesystem paths" rule, every tool
+location in `build.ps1` resolves from an environment variable (`GODOT_BIN`,
+`GODOT_ANDROID_TEMPLATE`, `JAVA_HOME_17`) with a conventional Windows fallback, and fails with an
+actionable message rather than silently using a wrong path. This is a deliberate improvement over
+`build.sh`, which hardcodes one developer's paths; `build.sh` should eventually get the same
+treatment, but that is a separate change and is not bundled here.
+
+Two Windows-specific behaviors are baked in: the script prefers Godot's `_console.exe` build
+(the plain `.exe` detaches from the console, so a headless export prints nothing and failures are
+invisible), and it warns loudly when the patched `libgodot_android.so` is absent, because that
+configuration builds and launches successfully but drops every decoded video frame at
+`stream_connection.cpp:1195` — a black screen that is otherwise very hard to diagnose.
+
+**Alternatives considered**:
+- **WSL2** (recommended by this agent, declined by the developer): would have let `build.sh` run
+  nearly unmodified and matched upstream's tested environment. Rejected by the developer in favor
+  of a native toolchain; recorded here so the tradeoff is visible if Windows-specific build
+  problems accumulate later. The known risk is the vcpkg cross-compile of ffmpeg/openssl/curl to
+  `arm64-android`, which is better trodden from a Linux host.
+- **Port `build.sh` to be cross-platform** (e.g. rewrite in Python). Rejected for now: it would
+  mean rewriting a working, tested script that upstream maintains, for the benefit of one
+  contributor's platform — a larger and riskier change than adding a parallel entry point.
+
+**Files/components affected**: `build.ps1` (new). `build.sh` unchanged.
+
+**Scope**: Cross-platform tooling (the script is Windows-specific, but it builds both the Quest
+and Android XR targets, selected via `-Target quest|androidxr`).
+
+---
+
+## 2026-08-20 — Add the missing `nightfall-stream.gdextension` descriptor
+
+**Decision**: Add `addons/nightfall-stream/nightfall-stream.gdextension` to the repository.
+
+**Reason**: The repository contains no `.gdextension` file anywhere — it is not tracked, not
+present on disk in a fresh clone, not produced by CMake (`CMakeLists.txt` only copies the built
+`.so` to `addons/nightfall-stream/bin/<platform>/` at line 165), and not covered by any
+`.gitignore` rule for that name. Without this descriptor Godot never loads the native library, so
+`ClassDB.class_exists("NightfallStream")` is false and `main.gd:758-762` aborts startup with
+`[FATAL] NightfallStream GDExtension failed to load`. In other words, a fresh clone of this
+repository cannot run, on any platform, until this file exists.
+
+The most likely explanation is that upstream's copy lives inside `addons/nightfall-stream/bin/`,
+which *is* gitignored (`.gitignore` ignores `bin/`), so it was never committed. Placing it at the
+addon root instead keeps it outside the ignored directory and therefore trackable.
+
+Contents are derived from the code rather than guessed: `entry_symbol` is
+`nightfall_stream_init` per `register_types.cpp:55`, and the library paths follow the CMake deploy
+target and suffix convention at `CMakeLists.txt:64-76,165`.
+
+**Alternatives considered**:
+- Ask the upstream author for his copy and commit that verbatim. Still preferable if it becomes
+  available — this reconstruction should be replaced by the original if they differ. It was not
+  available at the time of writing and the fork could not build without it.
+- Generate the file from CMake at build time. Rejected: it is a static descriptor that Godot must
+  see at editor/import time, before and independent of any native build; generating it would make
+  opening the project in the editor depend on having run CMake first.
+
+**Files/components affected**: `addons/nightfall-stream/nightfall-stream.gdextension` (new).
+
+**Scope**: Cross-platform (required for Quest, Android XR, and Linux alike).
