@@ -436,7 +436,10 @@ work modifies `build.sh`.
 ```bash
 adb devices                                   # confirm device visible (serial - do not record)
 adb install -r Nightfall-AndroidXR-arm64-v8a-debug.apk
-adb shell am start -n app.nightfall.androidxr/com.godot.game.GodotApp
+# GodotAppLauncher, not GodotApp: the latter is the inner activity and is not
+# exported, so targeting it directly fails with a SecurityException. Confirm the
+# entry point with: adb shell cmd package resolve-activity --brief <package>
+adb shell am start -n app.nightfall.androidxr/com.godot.game.GodotAppLauncher
 adb logcat -s NightfallXR:* GodotApp:* AndroidMediaCodec:* VCONN:*
 ```
 
