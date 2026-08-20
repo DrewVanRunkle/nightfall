@@ -16,6 +16,7 @@ public class GodotApp extends GodotActivity {
 	public static native void setAndroidContext(Object context);
 
 	public static String jniResult = "NOT_RUN";
+	public static boolean nativeLibraryLoaded = false;
 	public static DepthEstimator depthEstimator;
 	public static WifiManager.MulticastLock multicastLock;
 
@@ -28,12 +29,36 @@ public class GodotApp extends GodotActivity {
 				Log.e("GODOT", "Unable to load System.Security.Cryptography.Native.Android library");
 			}
 		}
-		try {
-			System.loadLibrary("nightfall-stream.android.template_release.arm64");
-			initializeMoonlightJNI();
-			jniResult = "SUCCESS";
-		} catch (Throwable e) {
-			jniResult = "FAILED: " + e.getClass().getName() + ": " + e.getMessage();
+		// The GDExtension .so is named after the Godot build variant it targets,
+		// so a debug APK ships template_debug and a release APK template_release.
+		// Try both: loading only the release name leaves the native methods
+		// unbound in a debug build, and the first call to one of them (see
+		// onCreate) then throws an uncaught UnsatisfiedLinkError.
+		Throwable loadError = null;
+		for (String lib : new String[] {
+					"nightfall-stream.android.template_release.arm64",
+					"nightfall-stream.android.template_debug.arm64" }) {
+			try {
+				System.loadLibrary(lib);
+				loadError = null;
+				break;
+			} catch (Throwable e) {
+				loadError = e;
+			}
+		}
+		if (loadError == null) {
+			try {
+				initializeMoonlightJNI();
+				jniResult = "SUCCESS";
+				nativeLibraryLoaded = true;
+			} catch (Throwable e) {
+				jniResult = "FAILED: " + e.getClass().getName() + ": " + e.getMessage();
+			}
+		} else {
+			jniResult = "FAILED: " + loadError.getClass().getName() + ": " + loadError.getMessage();
+		}
+		if (!nativeLibraryLoaded) {
+			Log.e("GODOT", "nightfall-stream native library not loaded: " + jniResult);
 		}
 	}
 
@@ -66,7 +91,14 @@ public class GodotApp extends GodotActivity {
 		SplashScreen.installSplashScreen(this);
 		EdgeToEdge.enable(this);
 		super.onCreate(savedInstanceState);
-		setAndroidContext(getApplicationContext());
+		// Native methods are only bound if the static initializer loaded the
+		// library. Calling one otherwise throws an uncaught UnsatisfiedLinkError
+		// and kills the app during launch, hiding the real cause.
+		if (nativeLibraryLoaded) {
+			setAndroidContext(getApplicationContext());
+		} else {
+			Log.e("GODOT", "Skipping setAndroidContext, native library unavailable: " + jniResult);
+		}
 		acquireMulticastLock(getApplicationContext());
 		depthEstimator = new DepthEstimator();
 		depthEstimator.initialize(getApplicationContext());
