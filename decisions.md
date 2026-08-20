@@ -1,7 +1,8 @@
 # Architectural & Implementation Decisions — Android XR Port
 
 This log records every meaningful architectural or implementation decision made while porting
-Nightfall to Android XR (Google's Android XR platform, initial target hardware: XREAL Aura),
+Nightfall to Android XR (Google's Android XR platform; the specific target device is
+deliberately not named in this repository - see the 2026-08-20 entry on device confidentiality),
 per the working rules in `ANDROID_XR_PORT.md`. Entries are append-only, newest last. Do not
 edit past entries except to fix factual errors — add a new entry to record a change of course.
 
@@ -271,3 +272,44 @@ target and suffix convention at `CMakeLists.txt:64-76,165`.
 **Files/components affected**: `addons/nightfall-stream/nightfall-stream.gdextension` (new).
 
 **Scope**: Cross-platform (required for Quest, Android XR, and Linux alike).
+
+---
+
+## 2026-08-20 — Do not name the target Android XR device in this repository
+
+**Decision**: Refer to the initial Android XR target hardware generically ("the target device",
+"the Android XR target") in all committed files, commit messages, branch names, and code
+comments. Do not record the device's vendor or product name, model identifiers, specifications,
+firmware/runtime version strings, or anything else that identifies it.
+
+**Reason**: The target hardware is pre-release development hardware and the project owner
+requires that no information about it be published. Earlier commits in this repository named the
+device in `ANDROID_XR_PORT.md` and `decisions.md`; those references have been removed and this
+convention adopted going forward.
+
+Note this is a documentation/publication constraint, not a technical one: nothing about the port
+itself depends on naming the device. The port targets the Android XR platform generally, and the
+audit found no device-specific code is needed — the open hardware questions in
+`ANDROID_XR_PORT.md` §7 (Vulkan `VK_ANDROID_external_memory_android_hardware_buffer` support,
+composition-layer behavior, passthrough blend-mode advertisement) are phrased as properties of
+"the target device" and are answered by testing, not by identifying the model.
+
+**Practical limits of the scrub, recorded honestly**: removing the strings from the working tree
+does not remove them from already-published git history. The references were introduced in commit
+`cc73756` and were pushed to a public repository, so they should be treated as already disclosed.
+Rewriting history and force-pushing does not reliably redact content on a hosting provider that
+has already served it. The effective mitigations are (a) this convention going forward, and
+(b) migrating to a private repository and deleting the public fork, which is being done
+separately.
+
+**Alternatives considered**:
+- Use an internal codename instead of a generic noun. Rejected as unnecessary indirection: the
+  documents only ever need to distinguish "the Android XR target" from "Quest", and a codename
+  invites someone to eventually explain what it maps to.
+- Keep the device name in a local, gitignored file. Rejected: it adds a leak vector (an
+  accidental `git add -f`, or the file being read into a future commit message) for no benefit,
+  since no committed content needs the name.
+
+**Files/components affected**: `ANDROID_XR_PORT.md` (§1, §7, §12), `decisions.md` (header).
+
+**Scope**: Cross-platform (repository-wide documentation convention).

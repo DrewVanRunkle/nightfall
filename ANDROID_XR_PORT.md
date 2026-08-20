@@ -14,7 +14,8 @@ map, status board, and how-to.
 ## 1. Goal
 
 Port Nightfall from Meta Quest / Android OpenXR to also run natively on **Android XR**,
-initially targeting the **XREAL Aura** development hardware, while:
+initially targeting a specific Android XR device (referred to throughout as "the target
+device"), while:
 
 - preserving existing GameStream functionality (Sunshine / Apollo / Vibepollo compatibility),
 - preserving existing Meta Quest support,
@@ -22,7 +23,7 @@ initially targeting the **XREAL Aura** development hardware, while:
 - protecting the low-latency zero-copy Android video path above all else.
 
 First success criterion (unchanged from the task brief): *Nightfall launches natively in
-immersive Android XR on the Aura, connects to a Vibepollo/Apollo host, starts a GameStream
+immersive Android XR on the target device, connects to a Vibepollo/Apollo host, starts a GameStream
 session, and renders the decoded PC image on a head-tracked spatial screen with working gamepad
 input and audio.*
 
@@ -289,7 +290,7 @@ genuinely unresolvable without a device/build and are tracked as before.
    Quest's mobile Adreno GPU, this is flagged as a **compatibility risk to test**, not a confirmed
    blocker — do not switch renderers preemptively (working rule 1); only revisit if Forward+
    demonstrably fails or underperforms on Android XR hardware.
-4. **Does the target Vulkan ICD (XREAL Aura / Android XR reference driver) implement
+4. **Does the target device's Vulkan ICD implement
    `VK_ANDROID_external_memory_android_hardware_buffer`?** Assumed yes (near-universal on modern
    Android GPUs) but must be confirmed via device logs, not assumed. Unresolved — requires device.
 5. **Do `OpenXRCompositionLayerCylinder`/`Quad` behave correctly on the Android XR OpenXR
@@ -471,7 +472,7 @@ document created.
      `min_sdk="34"`, `target_sdk="34"`, and appropriate `android_xr_features/*` values.
    - Build the GDExtension a second time with an **NDK 28.x** toolchain (separate from the NDK 27
      toolchain used for Quest) and extend `build.sh` to stage the confirmed Android XR vendor AAR.
-   - Build, install to XREAL Aura, and work through the testing checklist in §10 in order,
+   - Build, install to the target device, and work through the testing checklist in §10 in order,
      starting with "application installs" / "launches into immersive XR" / "OpenXR initializes."
      Log whether alpha-blend passthrough works with no extra extension request (§7 item 2).
    - Only after basic streaming + gamepad + audio work (the MVP list in the task brief) should
