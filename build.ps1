@@ -44,6 +44,12 @@ param(
     [switch]$Release,
     [switch]$Install,
 
+    # Wipe android/build and re-extract android_source.zip instead of reusing an
+    # installed template. Note that a raw extraction alone is not a valid
+    # template - see the staging section - so this normally needs to be followed
+    # by "Project > Install Android Build Template..." in the editor.
+    [switch]$CleanTemplate,
+
     # Override if your Godot version differs. Must match the installed
     # export templates directory name exactly.
     [string]$GodotVersion = '4.7.1.stable',
@@ -194,17 +200,36 @@ try {
     # Stage the Gradle project (mirrors build.sh:165-188).
     # ----------------------------------------------------------------------
     $buildDir = Join-Path $ScriptDir 'android\build'
-    if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
-    New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 
-    Write-Host "Extracting Android template..."
-    Expand-Archive -Path $Templates -DestinationPath $buildDir -Force
+    # Unpacking android_source.zip is NOT equivalent to "Project > Install
+    # Android Build Template": the editor also writes files the archive does not
+    # carry (settings.gradle, the gradlew wrappers, .gdignore). A raw extraction
+    # is still rejected as "Android build template not installed", so an existing
+    # editor-made install is reused rather than destroyed and rebuilt.
+    $templateInstalled = (Test-Path (Join-Path $buildDir 'build.gradle')) -and
+                         (Test-Path (Join-Path $buildDir 'settings.gradle'))
 
-    # Extracting android_source.zip ourselves is what "Project > Install Android
-    # Build Template" does, but Godot also validates res://android/.build_version
-    # against the running editor and refuses the Gradle build on a mismatch
-    # ("Android build template not installed"). The stamp must be the template's
-    # own version, which is the export_templates folder name (e.g. 4.7.1.stable).
+    if ($templateInstalled -and -not $CleanTemplate) {
+        Write-Host "Reusing installed Android build template."
+    }
+    else {
+        if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
+
+        Write-Host "Extracting Android template..."
+        Expand-Archive -Path $Templates -DestinationPath $buildDir -Force
+
+        if (-not (Test-Path (Join-Path $buildDir 'settings.gradle'))) {
+            Write-Warning "Extracted template has no settings.gradle - Godot will likely reject it."
+            Write-Warning "  Open the project in the Godot editor and run:"
+            Write-Warning "    Project > Install Android Build Template..."
+            Write-Warning "  then re-run this script; it will reuse that install."
+        }
+    }
+
+    # Godot validates res://android/.build_version against the running editor and
+    # refuses the Gradle build on a mismatch. The stamp must be the template's own
+    # version, which is the export_templates folder name (e.g. 4.7.1.stable).
     $buildVersion = Split-Path (Split-Path $Templates -Parent) -Leaf
     $versionStamp = Join-Path $ScriptDir 'android\.build_version'
     $existing = if (Test-Path $versionStamp) { (Get-Content $versionStamp -Raw).Trim() } else { '' }
@@ -248,9 +273,15 @@ try {
     $dav2 = Join-Path $ScriptDir 'android\src\main\assets\depth-anything-v2-small.tflite'
     if (Test-Path $dav2) { Copy-Item $dav2 $assetDest -Force }
 
-    # Inject the tensorflow-lite dependency (mirrors build.sh:181).
+    # Inject the tensorflow-lite dependency (mirrors build.sh:181). The template
+    # now persists between runs, so skip if a previous run already injected it -
+    # otherwise the dependency accumulates a line per build.
     $gradleFile = Join-Path $buildDir 'build.gradle'
     $lines = Get-Content $gradleFile
+    if ($lines -match 'org\.tensorflow:tensorflow-lite') {
+        Write-Host "tensorflow-lite dependency already present"
+        $lines = $null
+    }
     $patched = $false
     $newLines = foreach ($line in $lines) {
         $line
@@ -260,10 +291,13 @@ try {
             $patched = $true
         }
     }
-    if (-not $patched) {
-        throw "Could not find the androidx.documentfile anchor line in build.gradle. The Godot template layout changed; update this script's injection point."
+    if ($null -ne $lines) {
+        if (-not $patched) {
+            throw "Could not find the androidx.documentfile anchor line in build.gradle. The Godot template layout changed; update this script's injection point."
+        }
+        Set-Content $gradleFile $newLines
+        Write-Host "Injected tensorflow-lite:2.16.1 dependency"
     }
-    Set-Content $gradleFile $newLines
     Write-Host "Injected tensorflow-lite:2.16.1 dependency"
 
     # Stage the vendor AAR matching this preset's enabled vendor plugin.
@@ -305,10 +339,11 @@ finally {
         Move-Item $ConfigBackup $ConfigPath -Force
         Write-Host "Restored original export_presets.cfg"
     }
-    # Godot rescans android/build and errors on stale artifacts; build.sh
-    # removes it after every export for the same reason (build.sh:207).
-    $buildDir = Join-Path $ScriptDir 'android\build'
-    if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force -ErrorAction SilentlyContinue }
+    # build.sh:207 deletes android/build after every export so the editor does not
+    # rescan stale artifacts. That is not done here: the directory is a real
+    # editor-installed template that cannot be recreated by extracting the zip,
+    # and deleting it would force a manual reinstall before every build. The
+    # template ships a .gdignore, which is what keeps the editor out of it.
     $strayActionMap = Join-Path $ScriptDir 'openxr_action_map.tres'
     if (Test-Path $strayActionMap) { Remove-Item $strayActionMap -Force -ErrorAction SilentlyContinue }
     Pop-Location
