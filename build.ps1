@@ -153,8 +153,13 @@ $ConfigBackup = "$ConfigPath.bak"
 
 # Verify the preset actually exists before doing any expensive work.
 if (-not (Select-String -Path $ConfigPath -Pattern "^name=`"$Preset`"$" -Quiet)) {
+    # Enumerate every match's capture group individually - flattening .Matches
+    # and then indexing .Groups[1] silently yields only the first preset name.
+    $available = Select-String -Path $ConfigPath -Pattern '^name="(.+)"$' |
+                 ForEach-Object { $_.Matches[0].Groups[1].Value }
     throw "Preset '$Preset' not found in export_presets.cfg. Available: " +
-          ((Select-String -Path $ConfigPath -Pattern '^name="(.+)"$').Matches.Groups[1].Value -join ', ')
+          ($available -join ', ') +
+          "`nIf 'NightfallAndroidXR' is missing, pull the latest commits on this branch."
 }
 
 try {
