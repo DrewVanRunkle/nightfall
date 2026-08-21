@@ -72,7 +72,13 @@ var _startup_cover: MeshInstance3D
 var _startup_ready: bool = false
 
 var _is_using_hands: bool = false
-var tracking_mode: int = 0
+# Default to Hands so headsets that ship without controllers have a usable input
+# path on first run. With this off, get_is_hand_tracking() returns false and the
+# only way to turn it on is the menu button - which cannot be reached without an
+# input device. This only makes hand tracking *available*: _process_hand_tracking
+# still switches to hands solely when the trackers report real data, so
+# controllers continue to take precedence wherever they exist.
+var tracking_mode: int = 1
 var tracking_labels: Array = ["Off", "Hands"]
 var right_hand_visual: Node3D = null
 var left_hand_visual: Node3D = null
