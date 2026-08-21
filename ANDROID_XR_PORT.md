@@ -1,8 +1,10 @@
 # Nightfall — Android XR Port: Living Status Document
 
-**Status as of 2026-08-16: Phase 0 (repository audit) complete, including research follow-up
-that resolved the plugin-version/SDK-level/passthrough-extension unknowns from §7 items 1–3
-against official Google/Godot sources. No code changes made yet.**
+**Status as of 2026-08-20: Nightfall launches natively in immersive Android XR.** OpenXR
+initializes and renders in stereo, composition layers are natively supported, passthrough is
+available, and the UI is visible and head-locked on device. Input is the current blocker, and
+video cannot work until the patched engine is built (§6). See §11 for the verified checklist and
+§12 for next steps.
 
 This document is maintained continuously during the Android XR port. It reflects the current
 state of understanding and implementation — update it whenever a decision, blocker, or milestone
@@ -90,6 +92,12 @@ code, not Meta-specific** (see §5). This is the single most important subsystem
 This audit was performed in a remote sandbox with **no Godot editor/headless binary, no Android
 SDK/NDK, no `vcpkg`, no Android/Android XR device or emulator, and no Docker daemon**. Present:
 `cmake` 3.28, `ninja` 1.11, OpenJDK 21, Gradle 8.14.3, network access via an outbound proxy.
+
+**Superseded (2026-08-20).** The build and on-device work has since been carried out on a
+developer machine (native Windows 11 — see `decisions.md`), producing a working APK and the
+first on-device launch recorded in §11. The classifications in §4 were originally derived from
+static review alone; those since confirmed or corrected on hardware are marked as such. The
+note below is retained because it explains why the initial audit made no build claims.
 
 **Consequence**: Phase 1 ("build in existing supported configuration, verify a baseline APK") and
 Phase 3 on-device testing could not be executed in this session. Everything below is static code
