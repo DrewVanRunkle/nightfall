@@ -313,3 +313,79 @@ separately.
 **Files/components affected**: `ANDROID_XR_PORT.md` (§1, §7, §12), `decisions.md` (header).
 
 **Scope**: Cross-platform (repository-wide documentation convention).
+
+---
+
+## 2026-08-20 — Build on native Windows 11 rather than WSL2
+
+**Decision**: Run the whole toolchain natively on Windows 11 and add `build.ps1` as a PowerShell
+equivalent of `build.sh`, rather than putting the documented Linux toolchain under WSL2.
+
+**Reason**: Developer preference, made with the tradeoff stated. `build.sh` is bash with paths
+hardcoded to the upstream author's machine (`build.sh:30-34`) and calls `unzip`, which Git Bash
+does not ship, so it cannot run on Windows as-is either way.
+
+**Alternatives considered**: WSL2 (recommended at the time — `build.sh` would work after fixing
+four paths, and the vcpkg cross-compile to `arm64-android` is better trodden from a Linux host);
+a hybrid of WSL2 builds with a native editor. Rejected by the developer.
+
+**Consequences**: `build.ps1` is a parallel build path upstream never exercises. It has since
+diverged usefully — it stamps `android/.build_version` and reuses an installed build template,
+neither of which `build.sh` does. The vcpkg cross-compile worked from Windows without incident
+(~1.2 h for the first dependency build).
+
+**Files/components affected**: `build.ps1` (new), `addons/nightfall-stream/nightfall-stream.gdextension` (new).
+
+**Scope**: Cross-platform tooling, Windows-specific implementation.
+
+---
+
+## 2026-08-20 — Default hand tracking and pointer smoothing on
+
+**Decision**: Default `tracking_mode` to `1` ("Hands") and `pointer_steady` to `2` ("High") in
+`main.gd`, rather than `0` and `1`.
+
+**Reason**: `get_is_hand_tracking()` returns false whenever `tracking_mode != 1`, and the only way
+to change it is a menu button — so on a headset with no controllers the app rendered correctly but
+could never be interacted with, and the setting could never be reached to fix that. Confirmed on
+device: hand trackers reported no data until the default changed, then immediately worked.
+Smoothing was raised because hand-tracked pointing jitters far more than a controller.
+
+**Alternatives considered**: Detecting the absence of controllers at runtime and enabling hands
+only then — more code, timing-dependent, and no better outcome, since `_process_hand_tracking`
+already switches to hands only when the trackers report real data. Leaving the defaults and
+telling users to change them — impossible without input.
+
+**Consequences**: On Quest, hand tracking is now available before being toggled on; saved state
+still overrides both defaults. Hand tracking proved usable but too imprecise for small UI targets
+even at High smoothing, so a controller remains the practical input.
+
+**Files/components affected**: `main.gd` (`tracking_mode`, `pointer_steady`), `export_presets.cfg`
+(`android_xr_features/hand_tracking=1` on the Android XR preset only).
+
+**Scope**: Cross-platform (defaults), Android XR-specific (preset flag).
+
+---
+
+## 2026-08-20 — Bound the re-pair recovery instead of removing it
+
+**Decision**: Let `_on_v2_launch_response`'s re-pair recovery run at most once per session, guarded
+by `_repair_attempted`, rather than deleting the behaviour or leaving it unbounded.
+
+**Reason**: That path calls `remove_host()` — it deletes the stored pairing — on *any* `/launch`
+failure containing "Session URL not found". That message also occurs when the host has a stuck
+session or when the requested app id does not exist, so a launch failing for an unrelated reason
+destroyed a working pairing and prompted for a PIN again, forever, while hiding the real error.
+Observed on device: the native logs showed all six pairing stages succeeding, then a fresh
+`start_pair` 450 ms later.
+
+**Alternatives considered**: Removing the recovery entirely — rejected, a genuinely stale pairing
+is a real case and upstream added this deliberately. Detecting stale pairing precisely — would
+require distinguishing host responses the client does not currently parse.
+
+**Consequences**: A stale pairing still self-heals on the first attempt; subsequent failures keep
+the pairing and surface the host's actual error. Pairing was confirmed to persist afterwards.
+
+**Files/components affected**: `src/stream_manager.gd`.
+
+**Scope**: Cross-platform.

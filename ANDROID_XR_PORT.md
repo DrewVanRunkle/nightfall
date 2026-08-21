@@ -1,10 +1,11 @@
 # Nightfall — Android XR Port: Living Status Document
 
-**Status as of 2026-08-20: Nightfall launches natively in immersive Android XR.** OpenXR
-initializes and renders in stereo, composition layers are natively supported, passthrough is
-available, and the UI is visible and head-locked on device. Input is the current blocker, and
-video cannot work until the patched engine is built (§6). See §11 for the verified checklist and
-§12 for next steps.
+**Status as of 2026-08-20: Nightfall runs natively in immersive Android XR and pairs with the
+host.** OpenXR renders in stereo, composition layers are natively supported, passthrough is
+available, hand tracking drives the UI, and the GameStream pairing handshake completes and
+persists. Two things remain: `/launch` returns no session URL so a stream never starts, and video
+cannot render until the patched engine is built (§6). See §11 for the verified checklist and §12
+for where to resume.
 
 This document is maintained continuously during the Android XR port. It reflects the current
 state of understanding and implementation — update it whenever a decision, blocker, or milestone
@@ -519,10 +520,18 @@ Verified on device:
 - [x] OpenXR initializes successfully — `libopenxr.google.so` loads, the `GodotOpenXR` plugin
       and `godotopenxrvendors` library initialize, Vulkan/Adreno comes up
 - [x] Nightfall UI is visible
-- [ ] Head tracking — not yet confirmed
-- [ ] Input — no usable input path on first launch; hand tracking has since been enabled in the
-      preset but is unverified
-- [ ] Everything downstream of input (discovery, pairing, streaming, audio, exit) — untested
+- [x] Head tracking — confirmed; the UI stays anchored in space
+- [x] Input — hand tracking works (`HandsActive: true` with live joint poses) after enabling it in
+      the preset and defaulting `tracking_mode` on. **Usable but imprecise**: small UI targets are
+      hard to hit even with pointer smoothing raised to High, so a controller/gamepad is the
+      practical input for now
+- [x] Host connection by manual IP
+- [x] Pairing — the full six-stage handshake completes, including the mTLS challenge on 47984,
+      and the pairing now persists across attempts
+- [ ] mDNS discovery — returns 0 hosts; unexplained, manual IP works
+- [ ] Stream start — **blocked**: `/launch` returns HTTP 200 with no `sessionUrl0`. Suspected
+      wrong app id (see §12). Not Android XR-specific
+- [ ] Audio, gamepad input, clean exit — untested, blocked behind stream start
 - [ ] Video — cannot work yet; the build uses the stock engine, so every decoded frame is
       dropped at `stream_connection.cpp:1195` (see §6 and task "patched engine")
 
@@ -550,26 +559,40 @@ undocumented.
 
 ## 12. Next steps
 
-1. ~~Close the Phase 0 unknowns in §7~~ — items 1–3 (plugin version, passthrough extension
-   requirements, SDK/NDK levels) resolved by research on 2026-08-16; remaining items 4–7 need a
-   real device/build and stay open.
-2. On a machine with the Godot editor installed: install/update GodotOpenXRVendors to **v5.1+**
-   via the AssetLib and record its exact version and Android XR AAR filename(s) here.
-3. **Phase 1** — run the documented `BUILD.md` process end-to-end on real tooling (Godot 4.7,
-   NDK 27.0.12077973, vcpkg, patched engine templates) to establish that the *existing* Quest
-   build is healthy before touching anything. Record exact commands/output here.
-4. **Phase 3 minimum target** — once Phase 1's baseline is confirmed:
-   - Add `[preset.3] NightfallAndroidXR` to `export_presets.cfg` (own package name, mirrors
-     existing preset pattern) with `enable_androidxr_plugin=true`, `enable_meta_plugin=false`,
-     `min_sdk="34"`, `target_sdk="34"`, and appropriate `android_xr_features/*` values.
-   - Build the GDExtension a second time with an **NDK 28.x** toolchain (separate from the NDK 27
-     toolchain used for Quest) and extend `build.sh` to stage the confirmed Android XR vendor AAR.
-   - Build, install to the target device, and work through the testing checklist in §10 in order,
-     starting with "application installs" / "launches into immersive XR" / "OpenXR initializes."
-     Log whether alpha-blend passthrough works with no extra extension request (§7 item 2).
-   - Only after basic streaming + gamepad + audio work (the MVP list in the task brief) should
-     hand tracking, advanced passthrough, or any other stretch feature be attempted.
+**Resume here (2026-08-20).** The Android XR port itself is working; what remains is one
+GameStream launch failure and the video path.
+
+1. **Use a controller or Bluetooth gamepad.** Hand tracking works but is too imprecise to
+   reliably hit small UI targets such as the app-selection button, even with pointer smoothing
+   raised to High. This is the MVP input priority anyway (gamepad is #1 in the brief, hand
+   tracking #5). A gamepad also makes IP entry and menu navigation practical.
+2. **Capture the `/launch` failure.** A build with the `xml_debug` logging is ready but the
+   output has not been captured yet. After a failed connect:
+   ```
+   adb shell run-as app.nightfall.androidxr cat files/debug.log | Select-String "APPS|STREAM|Launch"
+   ```
+   `[STREAM] Launch response XML:` carries the host's own `status_message`, and the `[APPS]`
+   lines show whether the app list was fetched or fell back to the hardcoded id.
+3. **Check the host's app list.** Leading theory for the launch failure: `query_app_list`
+   (`welcome_screen.gd:711-716`) falls back to Sunshine's classic Desktop id `881448767` when the
+   host returns no apps, and Apollo/Vibepollo may not use that id. Verify what the Apollo web UI
+   lists under Applications.
+4. **Then the patched engine** — the only remaining Android XR-specific work, and the sole thing
+   standing between here and the full first-success criterion. `git apply --check` the patch
+   against 4.7.1 source first (10 seconds) before committing to the scons build; both
+   `template_debug` and `template_release` are required (`BUILD.md:91`), plus a copy of
+   `libgodot_android.so` at `addons/nightfall-stream/bin/android/`.
 5. Keep this document and `decisions.md` updated at each step — do not let them go stale.
+
+### Deferred / not blocking
+
+- Hand-tracking pointing accuracy. The `-30°` wrist pitch in `_update_hand_tracker_transform`
+  (`main.gd:1573`) is tuned for Quest hand tracking and may not aim correctly on this runtime;
+  untested, and irrelevant once a controller is in use.
+- Two upstream bugs found but only partly addressed: `query_app_list`'s silent hardcoded-id
+  fallback, and `welcome_screen.gd:398`'s Pair button returning silently when no IP is set.
+- The Quest baseline build (Phase 1) was never run. Every defect found so far has been
+  platform-independent, so it is likely broken on Quest too for a fresh clone.
 
 ## 13. Future work (explicitly out of scope for the initial port)
 
