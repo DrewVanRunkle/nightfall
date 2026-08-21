@@ -839,12 +839,18 @@ func _init_xr(interface):
 			passthrough_supported = true
 			break
 
-	if passthrough_supported:
+	# Only go transparent when passthrough is actually wanted. Enabling it purely
+	# because the runtime *supports* alpha blending leaves a transparent
+	# framebuffer with nothing composited behind it until _init_post_xr runs
+	# apply_passthrough() half a second later, which renders as uninitialized GPU
+	# memory on runtimes that do not paint passthrough underneath.
+	if passthrough_supported and passthrough_enabled:
 		get_viewport().transparent_bg = true
 		world_env.environment.background_mode = Environment.BG_COLOR
 		world_env.environment.background_color = Color(0, 0, 0, 0)
 		interface.environment_blend_mode = XRInterface.XR_ENV_BLEND_MODE_ALPHA_BLEND
 	else:
+		get_viewport().transparent_bg = false
 		world_env.environment.background_mode = Environment.BG_COLOR
 		world_env.environment.background_color = Color(0, 0, 0, 1)
 		interface.environment_blend_mode = XRInterface.XR_ENV_BLEND_MODE_OPAQUE
