@@ -487,8 +487,47 @@ once each (not per-frame):
 
 ## 11. Current milestone
 
-**Phase 0 (repository audit) — complete.** No source files modified. `decisions.md` and this
-document created.
+**Nightfall launches natively in immersive Android XR (2026-08-20).** The app installs, the
+runtime grants it an immersive full-space slot, OpenXR initializes, and the UI renders in
+headset. Confirmed on device by the developer; input was not yet working at that point (see
+below).
+
+Verified on device:
+
+- [x] Application installs
+- [x] Application launches into immersive XR — the runtime logs
+      `Created immersive activity node` and `xrDesktopMode=full-space-unmanaged`
+- [x] OpenXR initializes successfully — `libopenxr.google.so` loads, the `GodotOpenXR` plugin
+      and `godotopenxrvendors` library initialize, Vulkan/Adreno comes up
+- [x] Nightfall UI is visible
+- [ ] Head tracking — not yet confirmed
+- [ ] Input — no usable input path on first launch; hand tracking has since been enabled in the
+      preset but is unverified
+- [ ] Everything downstream of input (discovery, pairing, streaming, audio, exit) — untested
+- [ ] Video — cannot work yet; the build uses the stock engine, so every decoded frame is
+      dropped at `stream_connection.cpp:1195` (see §6 and task "patched engine")
+
+Three defects were found and fixed getting here, none of them Android XR-specific — all three
+would affect a fresh clone on any platform:
+
+1. **The Android build template must be installed from the editor.** Unpacking
+   `android_source.zip` is not equivalent: the editor also writes `settings.gradle`, the
+   `gradlew` wrappers and `.gdignore`, and Godot rejects a raw extraction as "Android build
+   template not installed". `BUILD.md` does not mention this step, and `build.sh:165-168`
+   wipes and re-extracts the directory on every run — which only works because the upstream
+   machine had a real install underneath.
+2. **`android/.build_version` must match the running editor.** It was committed reading
+   `4.7.stable`, so any other Godot version failed the same way. Now stamped by `build.ps1`
+   and untracked.
+3. **`GodotApp.java` only loaded the release-variant GDExtension.** A debug APK ships
+   `template_debug`, so the load failed, the `catch (Throwable)` swallowed it, and the first
+   native call in `onCreate` threw an uncaught `UnsatisfiedLinkError` that killed the app
+   *after* OpenXR and Vulkan had already initialized.
+
+Also missing from a fresh clone and reconstructed during this work: the
+`nightfall-stream.gdextension` descriptor (absent from the repo entirely) and
+`VCPKG_OVERLAY_TRIPLETS`, which is required for the custom `arm64-android` triplet but
+undocumented.
 
 ## 12. Next steps
 
