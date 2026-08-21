@@ -3,9 +3,10 @@
 **Status as of 2026-08-20: Nightfall runs natively in immersive Android XR and pairs with the
 host.** OpenXR renders in stereo, composition layers are natively supported, passthrough is
 available, hand tracking drives the UI, and the GameStream pairing handshake completes and
-persists. Two things remain: `/launch` returns no session URL so a stream never starts, and video
-cannot render until the patched engine is built (§6). See §11 for the verified checklist and §12
-for where to resume.
+persists, and **a GameStream session establishes and stays connected**. One thing remains: video
+renders as uninitialized GPU memory rather than a picture, because the stock engine drops every
+decoded frame (§6). Building the patched engine is the last step to the first-success criterion.
+See §11 for the verified checklist and §12 for where to resume.
 
 This document is maintained continuously during the Android XR port. It reflects the current
 state of understanding and implementation — update it whenever a decision, blocker, or milestone
@@ -529,9 +530,15 @@ Verified on device:
 - [x] Pairing — the full six-stage handshake completes, including the mTLS challenge on 47984,
       and the pairing now persists across attempts
 - [ ] mDNS discovery — returns 0 hosts; unexplained, manual IP works
-- [ ] Stream start — **blocked**: `/launch` returns HTTP 200 with no `sessionUrl0`. Suspected
-      wrong app id (see §12). Not Android XR-specific
-- [ ] Audio, gamepad input, clean exit — untested, blocked behind stream start
+- [x] Stream start — a GameStream session establishes and **stays connected**. Earlier `/launch`
+      failures ("Session URL not found in response") were transient or host-side; they stopped
+      once the pairing stopped being destroyed on every failure
+- [x] Video reaches the screen — but renders as **uninitialized GPU memory** (a field of coloured
+      blocks), not a picture and not black. Expected with the stock engine: every decoded frame is
+      dropped at `stream_connection.cpp:1195`, so the texture bound to the composition layer is
+      never written and whatever was in that memory shows through. The patched engine is the fix
+- [ ] Audio — unconfirmed; independent of the video path, so it should work
+- [ ] Gamepad input, clean exit — untested
 - [ ] Video — cannot work yet; the build uses the stock engine, so every decoded frame is
       dropped at `stream_connection.cpp:1195` (see §6 and task "patched engine")
 
