@@ -706,10 +706,17 @@ func query_app_list():
 	if main.current_host_id < 0:
 		return
 	main.stream_backend.get_app_list(main.current_host_id, func(success: bool):
+		main._log("[APPS] get_app_list success=%s host_id=%d" % [str(success), main.current_host_id])
 		if success:
 			var _cm3 = main.stream_backend.get_config_manager() if main.stream_backend else null
 			main._available_apps = _cm3.get_apps(main.current_host_id) if _cm3 else []
+			for a in main._available_apps:
+				main._log("[APPS]   id=%s name=%s" % [str(a.get("id", "?")), str(a.get("name", "?"))])
 			if main._available_apps.is_empty():
+				# Falling back to a hardcoded Sunshine "Desktop" id. Hosts that do
+				# not use that id will fail /launch with "Session URL not found in
+				# response", which the caller then misreports as a stale pairing.
+				main._log("[APPS] Host returned no apps - falling back to hardcoded Desktop id 881448767")
 				main._available_apps = [{"name": "Desktop", "id": 881448767}]
 			main._selected_app_idx = 0
 			main._selected_app_id = main._available_apps[0].get("id", 881448767)
