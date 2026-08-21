@@ -5,6 +5,11 @@ var main: Node3D
 var bitrate: int = 20000
 var _v2_yuv_rect: ColorRect = null
 var local_capture_mode: bool = false
+# Guards the re-pair recovery in _on_v2_launch_response so it runs at most once
+# per session. That path deletes the stored pairing, and "Session URL not found"
+# has causes other than a stale pairing, so repeating it destroys a working
+# pairing over and over instead of surfacing the real failure.
+var _repair_attempted: bool = false
 
 func _init(owner: Node3D):
 	main = owner
@@ -69,8 +74,9 @@ func _on_v2_launch_response(response: Dictionary):
 	if response.get("status", "") != "success":
 		var msg = response.get("message", "unknown")
 		main._log("[STREAM] Launch failed: %s" % msg)
-		if msg.find("Session URL not found") != -1:
-			main._log("[PAIR] Launch failed due to stale pairing, re-pairing...")
+		if msg.find("Session URL not found") != -1 and not _repair_attempted:
+			_repair_attempted = true
+			main._log("[PAIR] Launch failed, trying re-pair once in case the pairing is stale...")
 			var ip = ""
 			for h in _b().get_hosts():
 				if h.get("id") == main.current_host_id:
@@ -87,10 +93,14 @@ func _on_v2_launch_response(response: Dictionary):
 			main._ui_status_label.text = "Pairing needed. Please re-select server."
 			main.welcome_screen.show_welcome_screen("server")
 		else:
+			# Either an unrelated launch failure, or the re-pair above already ran
+			# and did not help. Keep the pairing and surface the real error.
+			main._log("[STREAM] Not re-pairing (already attempted=%s)" % str(_repair_attempted))
 			main._ui_status_label.text = "Launch failed: " + str(msg)
 			main.welcome_screen.show_welcome_screen("server")
 		return
 
+	_repair_attempted = false
 	var server_info = {}
 	server_info["server_codec_mode_support"] = response.get("server_codec_mode_support", 0)
 	var scm = response.get("server_codec_mode_support", 0)
