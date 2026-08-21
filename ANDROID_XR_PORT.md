@@ -257,7 +257,15 @@ genuinely unresolvable without a device/build and are tracked as before.
    **Still open**: the precise installed plugin *version number* has not been read off disk. The
    identical option set is consistent with either v5.1 or an older release, so this should be
    confirmed before trusting Android XR runtime behavior.
-2. **RESOLVED (with nuance) — passthrough enablement.** Android XR's official OpenXR extension
+2. **RESOLVED ON DEVICE — passthrough needs no vendor extension.** Confirmed 2026-08-20:
+   `main.gd:824` logged `[XR] Blend modes: [0, 1, 2]`, and `2` is
+   `XRInterface.XR_ENV_BLEND_MODE_ALPHA_BLEND`. The Android XR runtime advertises alpha-blend
+   with **no** `openxr/extensions/...` project setting and no Android XR passthrough extension
+   requested, unlike Quest, where the Meta runtime only advertises it when `XR_FB_passthrough`
+   is enabled via `project.godot:48`. Nightfall's existing passthrough code therefore needs no
+   change. The original analysis follows.
+
+   **RESOLVED (with nuance) — passthrough enablement.** Android XR's official OpenXR extension
    docs (developer.android.com/develop/xr/openxr/extensions) model passthrough differently from
    Meta's single `XR_FB_passthrough` flag: `XR_ANDROID_composition_layer_passthrough_mesh` (needs
    the `SCENE_UNDERSTANDING_COARSE` runtime permission) is for compositing passthrough onto
@@ -293,10 +301,13 @@ genuinely unresolvable without a device/build and are tracked as before.
 4. **Does the target device's Vulkan ICD implement
    `VK_ANDROID_external_memory_android_hardware_buffer`?** Assumed yes (near-universal on modern
    Android GPUs) but must be confirmed via device logs, not assumed. Unresolved — requires device.
-5. **Do `OpenXRCompositionLayerCylinder`/`Quad` behave correctly on the Android XR OpenXR
-   runtime?** Code has a safe mesh-rendering fallback if `is_natively_supported()` returns false,
-   but actual visual/latency behavior needs on-device validation either way. Unresolved — requires
-   device.
+5. **RESOLVED ON DEVICE — composition layers are natively supported.** Confirmed 2026-08-20:
+   `composition_layer_manager.gd` logged `[COMP] Cylinder layer natively supported` and created
+   the cylinder, UI, cursor and keyboard layers, so `is_natively_supported()` returned true and
+   the mesh-rendering fallback was not used. Visual quality and latency under an actual stream
+   are still unmeasured. Also confirmed working: OpenXR stereo rendering at a 1920x1200 render
+   target (`main.gd:823`) and the display refresh-rate API (`settings_controller.gd`, set to
+   72Hz).
 6. **AI 3D mode reachability** (`ai_3d_mode` clamped to `[0,1]` vs. `apply_stereo()` gating at
    `>= 3`, per `performance-hypotheses-2026-07-08-fable.md:261`) — appears to be a pre-existing
    issue unrelated to this port; confirm independently before acting, and if real, it's out of
