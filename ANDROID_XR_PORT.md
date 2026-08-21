@@ -2,8 +2,8 @@
 
 **Status as of 2026-08-20: Nightfall runs natively in immersive Android XR and pairs with the
 host.** OpenXR renders in stereo, composition layers are natively supported, passthrough is
-available, hand tracking drives the UI, and the GameStream pairing handshake completes and
-persists, and **a GameStream session establishes and stays connected**. One thing remains: video
+available, hand tracking drives the UI, the GameStream pairing handshake completes and
+persists, and **a session establishes and stays connected**. One thing remains: video
 renders as uninitialized GPU memory rather than a picture, because the stock engine drops every
 decoded frame (§6). Building the patched engine is the last step to the first-success criterion.
 See §11 for the verified checklist and §12 for where to resume.
