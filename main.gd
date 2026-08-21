@@ -139,7 +139,10 @@ var display_refresh_rate: float = 72.0
 
 var cursor_mode: int = 1
 var cursor_labels: Array = ["Circle", "Pointer"]
-var pointer_steady: int = 1
+# "High" by default: hand-tracked pointing jitters far more than a controller,
+# and hands are now the default input path (see tracking_mode). Controller users
+# can drop this back to Low from the menu, and saved state overrides it.
+var pointer_steady: int = 2
 var pointer_steady_labels: Array = ["Off", "Low", "High"]
 var _steady_hit: Vector3 = Vector3.ZERO
 var _steady_active: bool = false
