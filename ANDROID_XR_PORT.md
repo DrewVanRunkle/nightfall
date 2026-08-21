@@ -425,6 +425,64 @@ work modifies `build.sh`.
 
 ---
 
+### Building the patched Godot engine (Windows) — unblocks video
+
+This is the last step to the first-success criterion. Without it the app runs but every decoded
+frame is dropped at `stream_connection.cpp:1195` and the video texture is never written.
+
+**Verified 2026-08-20:** `patches/godot-4.7-ahb.patch` applies **cleanly** to the `4.7.1-stable`
+tag (commit `a13da4f`), confirmed with `git apply --check`. No rebasing of the patch is needed.
+
+**Godot 4.7.1 requires NDK `29.0.14206865` exactly** (`platform/android/detect.py:70`, kept in
+sync with `platform/android/java/app/config.gradle:16`). This is *not* the NDK 27 used for the
+GDExtension, and not 28.x either. Godot will try to install it itself, but `detect.py:96` shells
+out to `sdkmanager "ndk;29.0.14206865"` — the deprecated semicolon syntax, which the current
+Android CLI rejects. **Install it manually first:**
+
+```powershell
+$android = "$env:LOCALAPPDATA\Android\Sdk\cmdline-tools\latest\bin\android.exe"
+& $android sdk install ndk/29.0.14206865
+Test-Path "$env:LOCALAPPDATA\Android\Sdk\ndk\29.0.14206865"   # must be True
+```
+
+Prerequisites: Python 3, `pip install scons`, JDK 17, and `ANDROID_HOME` set.
+
+```powershell
+# 1. Source matching the editor exactly - version skew here fails silently
+git clone --depth 1 --branch 4.7.1-stable https://github.com/godotengine/godot.git S:\dev\godot-471
+cd S:\dev\godot-471
+git apply --check S:\dev\nightfall\patches\godot-4.7-ahb.patch   # expect no output
+git apply S:\dev\nightfall\patches\godot-4.7-ahb.patch
+
+# 2. Build the debug template (this is the one a debug APK uses)
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+scons platform=android target=template_debug arch=arm64
+
+# 3. The artifact build.ps1 actually injects into the Gradle project
+Copy-Item bin\libgodot.android.template_debug.arm64.so `
+          S:\dev\nightfall\addons\nightfall-stream\bin\android\libgodot_android.so -Force
+```
+
+Then rebuild and install as usual. `build.ps1` copies that `.so` over the stock engine inside the
+extracted template (`aar_extract/jni/arm64-v8a` and `libs/{debug,release}/arm64-v8a`), and its
+"Building against the STOCK engine" warning should disappear.
+
+Notes:
+
+- **Only `template_debug` is needed to see video**, since the Android XR preset builds a debug
+  APK. `BUILD.md:91` insists on building both, which is correct for shipping a *release* APK — the
+  release template comes from `platform/android/java/lib/libs/release/arm64-v8a/libgodot_android.so`,
+  not from `bin/`. Skipping it halves the build time for now.
+- Swappy frame-pacing static libs are not vendored in the source tree, so `detect_swappy()`
+  returns false and it is compiled out. This is a warning, not an error.
+- Expect a long build (roughly 1-2 hours on a typical machine, `-j` scales it).
+
+**Verifying it worked**: `[COMP]` layers still initialize, and `adb logcat -d -s VCONN:V` no longer
+prints `SKIP: rd=... has=0`. That log line is the exact symptom of the missing engine methods, so
+its absence is the proof.
+
+---
+
 ## 10. Installation & testing procedure (Android XR, once a build exists)
 
 > ### ⚠️ Log handling — read before pasting any device output
