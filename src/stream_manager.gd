@@ -74,6 +74,13 @@ func _on_v2_launch_response(response: Dictionary):
 	if response.get("status", "") != "success":
 		var msg = response.get("message", "unknown")
 		main._log("[STREAM] Launch failed: %s" % msg)
+		# computer_manager.cpp attaches the host's raw response when /launch
+		# returns 200 without a sessionUrl0. Sunshine and Apollo put the actual
+		# refusal in status_message there, so log it rather than guessing at the
+		# cause from the generic message above.
+		if response.has("xml_debug"):
+			main._log("[STREAM] Launch response XML: %s" % str(response["xml_debug"]).substr(0, 800))
+		main._log("[STREAM] Requested app_id=%d host_id=%d" % [main._selected_app_id, main.current_host_id])
 		if msg.find("Session URL not found") != -1 and not _repair_attempted:
 			_repair_attempted = true
 			main._log("[PAIR] Launch failed, trying re-pair once in case the pairing is stale...")
