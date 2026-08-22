@@ -1,12 +1,10 @@
 # Nightfall — Android XR Port: Living Status Document
 
-**Status as of 2026-08-20: Nightfall runs natively in immersive Android XR and pairs with the
-host.** OpenXR renders in stereo, composition layers are natively supported, passthrough is
-available, hand tracking drives the UI, the GameStream pairing handshake completes and
-persists, and **a session establishes and stays connected**. One thing remains: video
-renders as uninitialized GPU memory rather than a picture, because the stock engine drops every
-decoded frame (§6). Building the patched engine is the last step to the first-success criterion.
-See §11 for the verified checklist and §12 for where to resume.
+**Status as of 2026-08-21: the first-success criterion is met.** Nightfall launches natively in
+immersive Android XR, connects to a Vibepollo host, starts a GameStream session, and renders the
+decoded PC desktop on a head-tracked spatial screen through the zero-copy
+MediaCodec -> AHardwareBuffer -> Vulkan path, with hand-tracked pointing. Audio and gamepad input
+are the remaining items to confirm. See §11 for the verified checklist.
 
 This document is maintained continuously during the Android XR port. It reflects the current
 state of understanding and implementation — update it whenever a decision, blocker, or milestone
@@ -602,11 +600,14 @@ Verified on device:
 - [x] Stream start — a GameStream session establishes and **stays connected**. Earlier `/launch`
       failures ("Session URL not found in response") were transient or host-side; they stopped
       once the pairing stopped being destroyed on every failure
-- [x] Video reaches the screen — but renders as **uninitialized GPU memory** (a field of coloured
-      blocks), not a picture and not black. Expected with the stock engine: every decoded frame is
-      dropped at `stream_connection.cpp:1195`, so the texture bound to the composition layer is
-      never written and whatever was in that memory shows through. The patched engine is the fix
-- [ ] Audio — unconfirmed; independent of the video path, so it should work
+- [x] **Video renders** — the decoded desktop appears on the spatial screen (2026-08-21), through
+      the full zero-copy path: NDK `AMediaCodec` -> `AHardwareBuffer` -> Vulkan import ->
+      YCbCr->RGBA compute shader -> `Texture2DRD` -> OpenXR composition layer. Required the
+      patched engine; until then every frame was dropped at `stream_connection.cpp:1195` and the
+      never-written texture showed as uninitialized GPU memory (coloured blocks, not black)
+- [x] Hand-tracked pointing is precise, once the runtime's aim pose is used rather than a ray
+      rebuilt from raw joints (see §12 and the 2026-08-21 decisions entry)
+- [ ] Audio — unconfirmed; independent of the video path
 - [ ] Gamepad input, clean exit — untested
 - [ ] Video — cannot work yet; the build uses the stock engine, so every decoded frame is
       dropped at `stream_connection.cpp:1195` (see §6 and task "patched engine")

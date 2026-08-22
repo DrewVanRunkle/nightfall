@@ -389,3 +389,59 @@ the pairing and surface the host's actual error. Pairing was confirmed to persis
 **Files/components affected**: `src/stream_manager.gd`.
 
 **Scope**: Cross-platform.
+
+---
+
+## 2026-08-21 — Use the runtime's OpenXR aim pose for hand pointing
+
+**Decision**: Stop overwriting the hand `XRController3D` transform with a ray reconstructed from
+hand joints, and enable `openxr/extensions/hand_interaction_profile` so the runtime supplies a
+proper aim pose.
+
+**Reason**: `_update_hand_tracker_transform` rebuilt a pointing ray each frame from the wrist and
+middle-finger metacarpal joints plus a hardcoded -30° pitch, discarding the `pose = "aim"` those
+nodes are configured with (`main.gd:693-695`). Raw joint positions jitter; runtime aim poses are
+computed and filtered by the vendor specifically for pointing. On device the difference was stark —
+pointing was unusable for small UI targets while another app on the same hardware pointed
+precisely. `openxr_action_map.tres` already bound `/user/hand/{left,right}/input/aim/pose` and
+`pinch_ext` under `/interaction_profiles/ext/hand_interaction_ext`, but Godot only requests
+`XR_EXT_HAND_INTERACTION` when `xr/openxr/extensions/hand_interaction_profile` is set
+(`openxr_hand_interaction_extension.cpp:59`), and it was not — so the profile never activated and
+no aim pose was ever published. Confirmed fixed on device.
+
+**Alternatives considered**: Tuning the -30° pitch or adding more pointer smoothing — treats the
+symptom, and smoothing trades jitter for latency on a client whose whole purpose is low latency.
+Deriving a better ray from more joints — still reconstructs what the runtime already provides,
+better, for free.
+
+**Consequences**: The joint-derived path remains as a fallback for runtimes that expose hand joints
+but no aim pose, and logs once which path is in use. Pointer smoothing can now go back down, since
+it was raised to compensate for the bad ray.
+
+**Files/components affected**: `main.gd` (`_update_hand_tracker_transform`), `project.godot`.
+
+**Scope**: Cross-platform.
+
+---
+
+## 2026-08-21 — Pin patch and shell files to LF via .gitattributes
+
+**Decision**: Add a `.gitattributes` marking `*.patch`, `*.diff` and `*.sh` as `text eol=lf`.
+
+**Reason**: The repository had no `.gitattributes`, so Git for Windows' default
+`core.autocrlf=true` rewrote `patches/godot-4.7-ahb.patch` to CRLF on checkout. `git apply` then
+failed every hunk against the LF Godot source with "patch does not apply", despite the patch being
+correct — verified to apply cleanly to the `4.7.1-stable` tag. This cost a full rebuild cycle: the
+engine was built unpatched, the resulting `.so` was copied into the APK, and the symptom was
+identical to having done nothing at all. `*.sh` is included because `build.sh` and
+`docker-build-linux.sh` execute on Linux and break with CRLF.
+
+**Alternatives considered**: Telling each developer to set `core.autocrlf=false` — relies on doing
+it before cloning, which is exactly the ordering that failed here. Converting the patch at apply
+time — works, but leaves the trap in place for the next person.
+
+**Consequences**: Existing Windows clones need `git add --renormalize .` to pick this up.
+
+**Files/components affected**: `.gitattributes` (new).
+
+**Scope**: Cross-platform tooling.
