@@ -1571,7 +1571,27 @@ func _update_hand_visualizer(hand_vis: Node3D, tracker: XRHandTracker):
 	else:
 		index_mesh.visible = false
 
+var _aim_pose_logged: bool = false
+
 func _update_hand_tracker_transform(hand_node: XRController3D, tracker: XRHandTracker):
+	# Prefer the runtime's aim pose. These nodes are configured with pose = "aim"
+	# (see _ready) and OpenXR runtimes compute and stabilise that pose
+	# specifically for pointing, including whatever filtering the vendor applies.
+	# The joint-derived fallback below reconstructs a ray from raw wrist and
+	# knuckle positions, which inherits all of their jitter - noticeably worse to
+	# point with. Only fall back when the runtime is not supplying an aim pose.
+	if hand_node.get_has_tracking_data():
+		var aim_pose := hand_node.get_pose()
+		if aim_pose and aim_pose.has_tracking_data:
+			if not _aim_pose_logged:
+				_aim_pose_logged = true
+				_log("[INPUT] Runtime aim pose available - using it for hand pointing")
+			return
+
+	if not _aim_pose_logged:
+		_aim_pose_logged = true
+		_log("[INPUT] No runtime aim pose - falling back to joint-derived hand pointing")
+
 	var wrist_ok = (tracker.get_hand_joint_flags(XRHandTracker.HAND_JOINT_WRIST) & 8) != 0
 	var middle_knuckle_ok = (tracker.get_hand_joint_flags(XRHandTracker.HAND_JOINT_MIDDLE_FINGER_METACARPAL) & 8) != 0
 	
