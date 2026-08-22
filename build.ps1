@@ -323,7 +323,11 @@ Install the GodotOpenXRVendors plugin (v5.1+) via the in-editor AssetLib.
     Write-Host "`nExporting $Preset..." -ForegroundColor Cyan
     $env:JAVA_HOME = $JavaHome
     & $Godot --headless --path $ScriptDir $exportFlag $Preset $outPath
-    $exportExit = $LASTEXITCODE
+    # The non-console Windows binary detaches from the console and can return
+    # without setting $LASTEXITCODE at all, which is a hard error under
+    # Set-StrictMode. Godot also exits 0 on a failed export, so the APK's
+    # existence below is the real check either way.
+    $exportExit = if (Test-Path variable:LASTEXITCODE) { $LASTEXITCODE } else { 'unknown' }
 
     if (-not (Test-Path $outPath)) {
         throw "Export failed (godot exit code $exportExit): $Output was not created."
@@ -352,6 +356,7 @@ finally {
 if ($Install) {
     Write-Host "`nInstalling on device..." -ForegroundColor Cyan
     & adb install -r (Join-Path $ScriptDir $Output)
-    if ($LASTEXITCODE -ne 0) { throw "adb install failed (exit $LASTEXITCODE)" }
+    $adbExit = if (Test-Path variable:LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+    if ($adbExit -ne 0) { throw "adb install failed (exit $adbExit)" }
     Write-Host "Done." -ForegroundColor Green
 }
