@@ -459,7 +459,11 @@ $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 scons platform=android target=template_debug arch=arm64
 
 # 3. The artifact build.ps1 actually injects into the Gradle project
-Copy-Item bin\libgodot.android.template_debug.arm64.so `
+# NOTE: scons MOVES the linked .so out of bin/ into the Java libs tree as its
+#       final step, leaving bin/ holding only obj/ - which reads as a failed
+#       build. BUILD.md:110 documents this for the release template; it applies
+#       to template_debug too.
+Copy-Item platform\android\java\lib\libs\debug\arm64-v8a\libgodot_android.so `
           S:\dev\nightfall\addons\nightfall-stream\bin\android\libgodot_android.so -Force
 ```
 
@@ -475,7 +479,14 @@ Notes:
   not from `bin/`. Skipping it halves the build time for now.
 - Swappy frame-pacing static libs are not vendored in the source tree, so `detect_swappy()`
   returns false and it is compiled out. This is a warning, not an error.
-- Expect a long build (roughly 1-2 hours on a typical machine, `-j` scales it).
+- Build time was ~13 minutes at high `-j` on a desktop machine, not the hours implied
+  elsewhere. scons is incremental, so an interrupted build resumes rather than
+  restarting - a `bin/` containing only `obj/` means the move above already happened,
+  not that the build failed.
+- Run `python misc/scripts/install_swappy_android.py` **before** building. Swappy is
+  Android's frame-pacing library; Godot warns that without it stutter is guaranteed,
+  which matters for a low-latency video client. It links statically, so adding it
+  afterwards means rebuilding.
 
 **Verifying it worked**: `[COMP]` layers still initialize, and `adb logcat -d -s VCONN:V` no longer
 prints `SKIP: rd=... has=0`. That log line is the exact symptom of the missing engine methods, so
