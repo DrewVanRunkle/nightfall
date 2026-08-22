@@ -1,0 +1,8 @@
+# Patch files must keep LF endings. Git for Windows defaults core.autocrlf to
+# true, which rewrites them to CRLF on checkout, and `git apply` then fails to
+# match LF source with "patch does not apply".
+*.patch text eol=lf
+*.diff  text eol=lf
+
+# Shell scripts are executed on Linux/macOS and break with CRLF.
+*.sh text eol=lf
